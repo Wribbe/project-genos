@@ -1,12 +1,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
 
 #include <sys/inotify.h>
+
+#define breakpoint() raise(SIGABRT)
 
 
 int
@@ -19,7 +22,7 @@ main(int argc, const char * args[])
   }
 
   FILE * output = popen("ls", "r");
-  size_t size_buff = 200;
+  size_t size_buff = 512;
   char buff[size_buff+1];
 
   size_t size_read = fread(buff, 1, size_buff, output);
@@ -50,7 +53,39 @@ main(int argc, const char * args[])
   inotify_add_watch( fd_inotify, ".", 
       IN_OPEN | IN_CLOSE | IN_ACCESS | IN_MODIFY
   );
+  size_t size_inotify_event = sizeof(struct inotify_event);
   printf("Waiting for events.\n");
-  size_read = read(fd_inotify, buff, size_buff);
-  printf("Past waiting for events, read: %zu bytes.\n", size_read);
+  for(;;) {
+    size_read = read(fd_inotify, buff, size_buff);
+//    printf("Past waiting for events, read: %zu bytes.\n", size_read);
+    struct inotify_event * e = (struct inotify_event *)buff;
+    int i = 0;
+    for (; i < size_read/size_inotify_event; e++,i++) {
+      // Only look at named events. 
+      if (!e->len) {
+        continue;
+      }
+      if (e->mask & IN_ISDIR) {
+        printf("[Event #%d]: Directory event", i);
+      } else {
+        printf("[Event #%d]: File event", i);
+      }
+      if (e->mask & IN_MODIFY) {
+        printf(",IN_MODIFY");
+      }
+      if (e->mask & IN_OPEN) {
+        printf(",IN_OPEN");
+      }
+      if (e->mask & IN_CLOSE) {
+        printf(",IN_CLOSE");
+      }
+      if (e->mask & IN_ACCESS) {
+        printf(",IN_ACCESS");
+      }
+      if (e->len) {
+        printf(",event->name: %s", e->name);
+      }
+      printf("\n");
+    }
+  }
 }
