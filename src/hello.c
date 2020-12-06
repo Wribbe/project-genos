@@ -1,15 +1,37 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <errno.h>
+#include <string.h>
 #include <signal.h>
+#include <errno.h>
 
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include <sys/inotify.h>
 
 #define breakpoint() raise(SIGABRT)
+
+
+bool
+endswith(const char * str, const char * ending)
+{
+  size_t lenstr = strlen(str);
+  size_t lenending = strlen(ending);
+  for (size_t ii=1; ii<=lenending; ii++) {
+    if (str[lenstr-ii] != ending[lenending-ii]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+
+void
+handle_events(int fd, int * wds)
+{
+}
 
 
 int
@@ -50,19 +72,24 @@ main(int argc, const char * args[])
   /* Try some inotify stuff. */
   int fd_inotify = inotify_init();
 
-  inotify_add_watch( fd_inotify, ".", 
-      IN_OPEN | IN_CLOSE | IN_ACCESS | IN_MODIFY
-  );
+//  uint32_t mask_event = IN_OPEN | IN_CLOSE | IN_ACCESS | IN_MODIFY;
+  uint32_t mask_event = IN_CLOSE_WRITE;
+
+  inotify_add_watch(fd_inotify, ".", mask_event);
+  inotify_add_watch(fd_inotify, "./src", mask_event);
   size_t size_inotify_event = sizeof(struct inotify_event);
   printf("Waiting for events.\n");
   for(;;) {
     size_read = read(fd_inotify, buff, size_buff);
 //    printf("Past waiting for events, read: %zu bytes.\n", size_read);
     struct inotify_event * e = (struct inotify_event *)buff;
-    int i = 0;
-    for (; i < size_read/size_inotify_event; e++,i++) {
+    for (int i=0; i < size_read/size_inotify_event; e++,i++) {
       // Only look at named events. 
       if (!e->len) {
+        continue;
+      }
+      // Only changes in *.c files.
+      if (!endswith(e->name, ".c")) {
         continue;
       }
       if (e->mask & IN_ISDIR) {
@@ -70,22 +97,10 @@ main(int argc, const char * args[])
       } else {
         printf("[Event #%d]: File event", i);
       }
-      if (e->mask & IN_MODIFY) {
-        printf(",IN_MODIFY");
+      if (e->mask & IN_CLOSE_WRITE) {
+        printf(",IN_CLOSE_WRITE");
       }
-      if (e->mask & IN_OPEN) {
-        printf(",IN_OPEN");
-      }
-      if (e->mask & IN_CLOSE) {
-        printf(",IN_CLOSE");
-      }
-      if (e->mask & IN_ACCESS) {
-        printf(",IN_ACCESS");
-      }
-      if (e->len) {
-        printf(",event->name: %s", e->name);
-      }
-      printf("\n");
+      printf(",event->name: %s\n", e->name);
     }
   }
 }
