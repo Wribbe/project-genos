@@ -1,10 +1,9 @@
-BINS := $(patsubst src/%.c,bin/%,$(wildcard src/*.c))
 
-all: ${BINS}
+all: bin/hello
 
 
-bin/% : src/%.c | bin
-	gcc $^ -o $@ -Wall -g -pedantic
+bin/% : src/%.c src/utils.c lib/utils.h | bin
+	gcc $^ -o $@ -Wall -g -pedantic -Ilib -lpthread
 
 
 bin:
